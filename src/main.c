@@ -2,32 +2,31 @@
 #include <pspkernel.h>
 
 #include "config.h"
+#include "constants.h"
 #include "hook.h"
-
-#define PLUGIN_NAME "joycenterfix"
-#define INPUT_MIN 0
-#define INPUT_CENTER 128
-#define INPUT_MAX 255
 
 PSP_MODULE_INFO(PLUGIN_NAME, PSP_MODULE_KERNEL, 1, 0);
 
 int x_offset = INPUT_CENTER;
 int y_offset = INPUT_CENTER;
+int deadzone = DEADZONE_MIN;
 
 int (*g_ctrl_read_positive)(SceCtrlData*, int count, int type);
 int (*g_ctrl_peek_positive)(SceCtrlData*, int count, int type);
 int (*g_ctrl_read_negative)(SceCtrlData*, int count, int type);
 int (*g_ctrl_peek_negative)(SceCtrlData*, int count, int type);
 
-int scale_relative_to_offset(int value, int* offset) {
-  if (*offset <= 0 || *offset >= 255) {
-    *offset = INPUT_CENTER;
-    return value;
+int adjust_stick_value(int value, int offset, int deadzone) {
+  int threshold_left = offset - deadzone;
+  int threshold_right = offset + deadzone;
+  if (threshold_left <= INPUT_MIN || threshold_right >= INPUT_MAX ||
+      (value >= threshold_left && value <= threshold_right)) {
+    return INPUT_CENTER;
   }
-  if (value < *offset) {
-    return INPUT_CENTER - ((INPUT_CENTER - INPUT_MIN) * (*offset - value)) / (*offset - INPUT_MIN);
+  if (value < offset) {
+    return INPUT_CENTER - ((INPUT_CENTER - INPUT_MIN) * (threshold_left - value)) / (threshold_left - INPUT_MIN);
   } else {
-    return INPUT_CENTER + ((INPUT_MAX - INPUT_CENTER) * (value - *offset)) / (INPUT_MAX - *offset);
+    return INPUT_CENTER + ((INPUT_MAX - INPUT_CENTER) * (value - threshold_right)) / (INPUT_MAX - threshold_right);
   }
 }
 
@@ -44,9 +43,9 @@ void adjust_values(SceCtrlData* pad_data, int count, int neg) {
       continue;
     }
 
-    int x = scale_relative_to_offset((int)pad_data[i].Lx, &x_offset);
+    int x = adjust_stick_value((int)pad_data[i].Lx, x_offset, deadzone);
     pad_data[i].Lx = (unsigned char)x;
-    int y = scale_relative_to_offset((int)pad_data[i].Ly, &y_offset);
+    int y = adjust_stick_value((int)pad_data[i].Ly, y_offset, deadzone);
     pad_data[i].Ly = (unsigned char)y;
   }
 }
@@ -66,25 +65,19 @@ MAKE_HOOK(ctrl_peek_negative_hook, g_ctrl_peek_negative)
 
 int main_thread(SceSize args, void* argp) {
   sceKernelDelayThread(1000000);
-  load_config(&x_offset, &y_offset);
+  load_config(&x_offset, &y_offset, &deadzone);
 
-  int ret = 0;
-  ret |= hook_function((unsigned int*)sceCtrlReadBufferPositive, ctrl_read_positive_hook,
-                       (unsigned int*)&g_ctrl_read_positive);
-  ret |= hook_function((unsigned int*)sceCtrlPeekBufferPositive, ctrl_peek_positive_hook,
-                       (unsigned int*)&g_ctrl_peek_positive);
-  ret |= hook_function((unsigned int*)sceCtrlReadBufferNegative, ctrl_read_negative_hook,
-                       (unsigned int*)&g_ctrl_read_negative);
-  ret |= hook_function((unsigned int*)sceCtrlPeekBufferNegative, ctrl_peek_negative_hook,
-                       (unsigned int*)&g_ctrl_peek_negative);
-
-  if (ret) {
-    return 0;
-  }
+  hook_function((unsigned int*)sceCtrlReadBufferPositive, ctrl_read_positive_hook,
+                (unsigned int*)&g_ctrl_read_positive);
+  hook_function((unsigned int*)sceCtrlPeekBufferPositive, ctrl_peek_positive_hook,
+                (unsigned int*)&g_ctrl_peek_positive);
+  hook_function((unsigned int*)sceCtrlReadBufferNegative, ctrl_read_negative_hook,
+                (unsigned int*)&g_ctrl_read_negative);
+  hook_function((unsigned int*)sceCtrlPeekBufferNegative, ctrl_peek_negative_hook,
+                (unsigned int*)&g_ctrl_peek_negative);
 
   sceKernelDcacheWritebackInvalidateAll();
   sceKernelIcacheInvalidateAll();
-
   sceKernelExitDeleteThread(0);
   return 0;
 }
