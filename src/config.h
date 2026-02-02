@@ -1,1 +1,1 @@
-int load_config(int* x_offset, int* y_offset, int* deadzone);
+int load_config(int* x_center, int* y_center, int* x_deadzone, int* y_deadzone);

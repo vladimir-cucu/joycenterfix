@@ -5,11 +5,12 @@
 #include "constants.h"
 #include "hook.h"
 
-PSP_MODULE_INFO(PLUGIN_NAME, PSP_MODULE_KERNEL, 1, 0);
+PSP_MODULE_INFO(PLUGIN_NAME, PSP_MODULE_KERNEL, 1, 1);
 
-int x_offset = INPUT_CENTER;
-int y_offset = INPUT_CENTER;
-int deadzone = DEADZONE_MIN;
+int x_center = INPUT_CENTER;
+int y_center = INPUT_CENTER;
+int x_deadzone = DEADZONE_MIN;
+int y_deadzone = DEADZONE_MIN;
 
 int (*g_ctrl)(SceCtrlData*, int count, int type);
 
@@ -40,9 +41,9 @@ void adjust_values(SceCtrlData* pad_data, int count, int neg) {
       continue;
     }
 
-    int x = adjust_stick_value((int)pad_data[i].Lx, x_offset, deadzone);
+    int x = adjust_stick_value((int)pad_data[i].Lx, x_center, x_deadzone);
     pad_data[i].Lx = (unsigned char)x;
-    int y = adjust_stick_value((int)pad_data[i].Ly, y_offset, deadzone);
+    int y = adjust_stick_value((int)pad_data[i].Ly, y_center, y_deadzone);
     pad_data[i].Ly = (unsigned char)y;
   }
 }
@@ -56,7 +57,7 @@ int ctrl_hook(SceCtrlData* pad_data, int count, int type) {
 
 int main_thread(SceSize args, void* argp) {
   sceKernelDelayThread(1000000);
-  load_config(&x_offset, &y_offset, &deadzone);
+  load_config(&x_center, &y_center, &x_deadzone, &y_deadzone);
 
   hook_function((unsigned int*)sceCtrlReadBufferPositive, ctrl_hook, (unsigned int*)&g_ctrl);
   hook_function((unsigned int*)sceCtrlPeekBufferPositive, ctrl_hook, (unsigned int*)&g_ctrl);
