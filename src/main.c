@@ -11,10 +11,7 @@ int x_offset = INPUT_CENTER;
 int y_offset = INPUT_CENTER;
 int deadzone = DEADZONE_MIN;
 
-int (*g_ctrl_read_positive)(SceCtrlData*, int count, int type);
-int (*g_ctrl_peek_positive)(SceCtrlData*, int count, int type);
-int (*g_ctrl_read_negative)(SceCtrlData*, int count, int type);
-int (*g_ctrl_peek_negative)(SceCtrlData*, int count, int type);
+int (*g_ctrl)(SceCtrlData*, int count, int type);
 
 int adjust_stick_value(int value, int offset, int deadzone) {
   int threshold_left = offset - deadzone;
@@ -50,31 +47,21 @@ void adjust_values(SceCtrlData* pad_data, int count, int neg) {
   }
 }
 
-#define MAKE_HOOK(hook_name, func_ptr)                        \
-  int hook_name(SceCtrlData* pad_data, int count, int type) { \
-    int ret = func_ptr(pad_data, count, type);                \
-    if (ret <= 0) return ret;                                 \
-    adjust_values(pad_data, ret, type & 1);                   \
-    return ret;                                               \
-  }
-
-MAKE_HOOK(ctrl_read_positive_hook, g_ctrl_read_positive)
-MAKE_HOOK(ctrl_peek_positive_hook, g_ctrl_peek_positive)
-MAKE_HOOK(ctrl_read_negative_hook, g_ctrl_read_negative)
-MAKE_HOOK(ctrl_peek_negative_hook, g_ctrl_peek_negative)
+int ctrl_hook(SceCtrlData* pad_data, int count, int type) {
+  int ret = g_ctrl(pad_data, count, type);
+  if (ret <= 0) return ret;
+  adjust_values(pad_data, ret, type & 1);
+  return ret;
+}
 
 int main_thread(SceSize args, void* argp) {
   sceKernelDelayThread(1000000);
   load_config(&x_offset, &y_offset, &deadzone);
 
-  hook_function((unsigned int*)sceCtrlReadBufferPositive, ctrl_read_positive_hook,
-                (unsigned int*)&g_ctrl_read_positive);
-  hook_function((unsigned int*)sceCtrlPeekBufferPositive, ctrl_peek_positive_hook,
-                (unsigned int*)&g_ctrl_peek_positive);
-  hook_function((unsigned int*)sceCtrlReadBufferNegative, ctrl_read_negative_hook,
-                (unsigned int*)&g_ctrl_read_negative);
-  hook_function((unsigned int*)sceCtrlPeekBufferNegative, ctrl_peek_negative_hook,
-                (unsigned int*)&g_ctrl_peek_negative);
+  hook_function((unsigned int*)sceCtrlReadBufferPositive, ctrl_hook, (unsigned int*)&g_ctrl);
+  hook_function((unsigned int*)sceCtrlPeekBufferPositive, ctrl_hook, (unsigned int*)&g_ctrl);
+  hook_function((unsigned int*)sceCtrlReadBufferNegative, ctrl_hook, (unsigned int*)&g_ctrl);
+  hook_function((unsigned int*)sceCtrlPeekBufferNegative, ctrl_hook, (unsigned int*)&g_ctrl);
 
   sceKernelDcacheWritebackInvalidateAll();
   sceKernelIcacheInvalidateAll();
